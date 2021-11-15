@@ -1,6 +1,8 @@
 # Matlab
 
 ## Simple Demo
+To generate and plot a frequency-response area for a single electrode/unit:
+
 
 ```
 % Load stimulus info and spike times
