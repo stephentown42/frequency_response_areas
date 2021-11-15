@@ -1,9 +1,11 @@
-function show_me_FRAs(stimTable, spikeTimes, plot_opts)
+function show_me_FRAs(stimTable, spikeTimes, time_opts, plot_opts)
 %
 %
 % INPUTS
 %   - stimTable: Table with columns for tone onset time ('startTime'), frequency ('frequency') and level ('level') 
 %   - spikeTimes: Vector of spike times for one unit
+%   - time_opts [optional]: Struct containing timing options
+%   - plot_opts [optional]: Struct containing plotting options, will not plot if empty
 %
 % Dependencies:
 %   - align_event_times.m
@@ -25,17 +27,25 @@ function show_me_FRAs(stimTable, spikeTimes, plot_opts)
 
 try
    
+    % Parse inputs
+    if ~exist('time_opt','var')
+      time_opt = struct('fra_bin_width',0.15, 'psth_bin_width',0.1, 'psth_window',[-0.1, 0.2], 'responsive_window', 0.1);
+    end
+    
+    if ~exist('plot_opt','var')
+      plot_opt = struct();
+    end
+   
   
                   
     options = struct('tlim', [0 inf], 'cleaning', 'none', 'fS', 2e4,...
         'draw', struct('waveform', true, 'times', false));
               
-    % Define bin widths
-    bin_width = 0.01;
-    psth_bins = -0.1 : bin_width : 0.2;
-    resp_bins = -0.1 : 0.1 : 0.1;        
-    raster_bins = -0.1 : 0.001 : 0.2;
-    fra_bin = [0 0.15];
+    % Define time vectors    
+    psth_bins = time_opt.psth_window(0) : time_opt.psth_bin_width : time_opt.psth_window(1);
+    resp_bins = -time_opt.responsive_window : time_opt.responsive_window : time_opt.responsive_window;        
+    raster_bins = time_opt.psth_window(0) : 0.001 : time_opt.psth_window(1);
+    fra_bin = [0 time_opt.fra_bin_width];
                   
     
     
