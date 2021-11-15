@@ -44,72 +44,42 @@ try
                           
     % Preassign frequency response area variables
     stimTable = sortrows(stimTable, {'Frequency','dB_SPL','StartTime'});
-    [freqs, levels] = meshgrid( unique(stim.Frequency), unique(stim.dB_SPL));
+    [freqs, levels] = meshgrid( unique(stimTable.Frequency), unique(stimTable.dB_SPL));
     
-    % Ensure spike times is a row vector
-    if iscolumn(spike_times)
-      spike_times = transpose(spike_times)
-    end   
-     
-    % Get spike times after sound onset                                                          
-    taso = bsxfun(@minus, spike_times, stim.startTime);
-    taso = transpose(taso);                                
-
-    
-
-    % Test if unit is responsive across all tones
-    is_responsive( taso, resp_bins);
+    FRA, taso = get_FRA(stimTable, spike_times, fra_bin)
       
-
     
 
 
+     
+                           
+   
+    % Test if unit is responsive across all tones
+    [h, p] = is_responsive( taso, resp_bins);
+    if h
+      fprintf('Unit is responsive to tones (p = %.3f)', p)
+    else
+      fprintf('Unit did not respond to tones (p = %.3f)', p)
+    end
+      
+    % Plotting options
+    if return_opt.PSTH_plot
+      psth_fig = draw_PSTH(taso, psth_bins)
+    end
+    
+    if retrun_opt.Raster_plot
+      raster_fig = draw_raster_wrapper(taso, raster_bins)
+    end
+      
+    if return_opt.FRA_plot
+      FRA_fig = draw_FRA
+    end   
 
+function fig = draw_FRA(taso)
 
+fig = figure();     
+     
 
-     % Draw and save Raster
-     fig = figure( 'name', ['Raster: ' h5_files(i).name],...
-                 'position', [50 50 1850 950]);
-     sp = dealSubplots(4, nChans/4);       
-
-     for chan = 1 : nChans                                                            
-
-         taso = bsxfun(@minus, spike_times{chan}, stim.CorrectedStartTime);
-         nhist = histc( transpose(taso), raster_bins);
-
-         chan_idx = chan_map.MCS_Chan == chan;
-         ax = sp( chan_map.Subplot_idx( chan_idx));
-
-         drawRaster( nhist', raster_bins, ax, stim.Frequency, cmocean('thermal'))
-
-         warp_chan = chan_map.Warp_Chan( chan_idx);
-         title(sprintf('E%02d: C%02d', warp_chan, chan))
-     end    
-
-     fig_file = strrep( h5_files(i).name, '.h5', '_raster');
-     myPrint( fullfile( save_path, fig_file), 'png', 150)
-     close(fig)
-
-     % Draw and save FRA
-     fig =  figure( 'name', ['FRA: ' h5_files(i).name],...
-             'position', [50 50 1850 950]);     
-     sp = dealSubplots(4, nChans/4); 
-
-     for chan = 1 : nChans
-
-         taso = bsxfun(@minus, spike_times{chan}, stim.CorrectedStartTime);
-         nhist = histc( transpose(taso), fra_bin);
-         nhist = nhist(1,:)' ./ diff(fra_bin);    
-
-         spike_rate = nan( size( freqs));
-
-         for stim_idx = 1 : numel(freqs)
-
-             rows = ismember([stim.Frequency stim.dB_SPL],...
-                             [freqs(stim_idx) levels(stim_idx)],'rows');
-
-             spike_rate(stim_idx) = mean(nhist(rows));
-         end
 
          chan_idx = chan_map.MCS_Chan == chan;
          axes( sp( chan_map.Subplot_idx( chan_idx)))  
@@ -152,13 +122,40 @@ catch err
 end
 
 
-function is_good = is_responsive( taso, resp_bins)
+function FRA, taso = get_FRA(stim, spike_times, fra_bin)
+ 
+   % Ensure spike times is a row vector
+   if iscolumn(spike_times)
+      spike_times = transpose(spike_times)
+   end           
+
+   % Get spike times after sound onset                                                          
+   taso = bsxfun(@minus, spike_times, stim.startTime);
+   taso = transpose(taso);   
+
+   % Get spike rate across time
+   nhist = histc( taso, fra_bin);
+   nhist = nhist(1,:)' ./ diff(fra_bin);    
+
+   FRA = nan( size( freqs));
+
+   for stim_idx = 1 : numel(freqs)
+
+      rows = ismember([stim.Frequency stim.dB_SPL],...
+                    [freqs(stim_idx) levels(stim_idx)],'rows');
+
+      FRA(stim_idx) = mean(nhist(rows));
+   end
+
+
+
+function h, p = is_responsive( taso, resp_bins)
 % function is_good = is_responsive( taso, resp_bins)
 % 
 % Get difference in number of spikes before and after tone
    nhist = histc( taso, resp_bins);
    x = diff(nhist(1:2,:));
-   is_good = ttest(x);
+   h, p = ttest(x);
 
 
 function fig = draw_PSTH(taso, psth_bins)
@@ -174,3 +171,13 @@ function fig = draw_PSTH(taso, psth_bins)
 
    xlabel('Time (s)')
    ylabel('Firing Rate (Hz)')    
+   
+   
+% Draw Raster
+function fig = draw_raster_wrapper(taso, raster_bins, stimTable)
+
+   fig = figure();
+
+   nhist = histc( taso, raster_bins);
+
+   drawRaster( nhist', raster_bins, ax, stimTable.Frequency, cmocean('thermal'))
