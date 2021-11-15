@@ -2,7 +2,7 @@ function show_me_FRAs(stimTable, spikeTimes, time_opts, plot_opts)
 %
 %
 % INPUTS
-%   - stimTable: Table with columns for tone onset time ('startTime'), frequency ('frequency') and level ('level') 
+%   - stimTable: Table with columns for tone onset time ('startTime'), frequency ('Frequency') and level ('dB_SPL') 
 %   - spikeTimes: Vector of spike times for one unit
 %   - time_opts [optional]: Struct containing timing options
 %   - plot_opts [optional]: Struct containing plotting options, will not plot if empty
@@ -33,169 +33,140 @@ try
     end
     
     if ~exist('plot_opt','var')
-      plot_opt = struct();
+      return_opt = struct('FRA_plot',true,'FRA_text',true,'PSTH_plot',true,'Raster_plot',true);
     end
    
-  
-                  
-    options = struct('tlim', [0 inf], 'cleaning', 'none', 'fS', 2e4,...
-        'draw', struct('waveform', true, 'times', false));
-              
     % Define time vectors    
     psth_bins = time_opt.psth_window(0) : time_opt.psth_bin_width : time_opt.psth_window(1);
     resp_bins = -time_opt.responsive_window : time_opt.responsive_window : time_opt.responsive_window;        
     raster_bins = time_opt.psth_window(0) : 0.001 : time_opt.psth_window(1);
     fra_bin = [0 time_opt.fra_bin_width];
-                  
-    
-    
-    
-    % Get stimulus onsets in neural file (and save)
-    matched_times = align_event_times(block_path); 
-    stim.CorrectedStartTime = transpose( matched_times);   
-    stim( isnan( stim.CorrectedStartTime), :) = [];     % Remove uncertain stimulus times
-    writetable( stim, fullfile( save_path, strrep( txt_file.name, '.txt', '.csv')))
-    
-    stim = sortrows(stim, {'Frequency','dB_SPL','StartTime'});
-    options.tlim(2) = max(stim.CorrectedStartTime) + (max(psth_bins) * 1.5);
-    
+                          
     % Preassign frequency response area variables
+    stimTable = sortrows(stimTable, {'Frequency','dB_SPL','StartTime'});
     [freqs, levels] = meshgrid( unique(stim.Frequency), unique(stim.dB_SPL));
     
-    % For each h5 file containing neural data
-    for i = 1 : numel(h5_files)
-        
-        % Load neural data
-        h5_path = fullfile( block_path, h5_files(i).name);
-        [spike_times, chan_map, wv, vStats, opt] = show_me_the_spikes( h5_path, options);
-        
-        spike_times = cellfun(@transpose, spike_times, 'un', 0);      
-        nChans = numel( spike_times);  
-        wv = struct('mean', cellfun(@mean, wv, 'un', 0),...
-                    'std', cellfun(@std, wv, 'un', 0));
-        
-        % Save spike times and signal stats
-        spike_file = strrep( h5_files(i).name, '.h5', '_spiketimes.mat');
-        save( fullfile( save_path, spike_file), 'spike_times','wv','chan_map','vStats','opt','matched_times')
+    % Ensure spike times is a row vector
+    if iscolumn(spike_times)
+      spike_times = transpose(spike_times)
+    end   
+     
 
-        stats_file = strrep( spike_file, 'spiketimes.mat','vStats.csv');
-        writetable( vStats, fullfile( save_path, stats_file), 'delimiter', ',')       
-        
-        % Draw and save PSTH
-        fig = figure( 'name', ['PSTH: ' h5_files(i).name],...
-                    'position', [50 50 1850 950]);
-        sp = dealSubplots(4, nChans/4);       
+     % Draw and save PSTH
+     fig = figure( 'name', ['PSTH: ' h5_files(i).name],...
+                 'position', [50 50 1850 950]);
+     sp = dealSubplots(4, nChans/4);       
 
-        good_chans = nan( nChans, 1);
-            
-        for chan = 1 : nChans                                                            
+     
 
-            taso = bsxfun(@minus, spike_times{chan}, stim.CorrectedStartTime);
-            taso = transpose(taso);                                
+     for chan = 1 : nChans                                                            
 
-            nhist = histc( taso, psth_bins);
-            nhist = nhist ./ bin_width;
+         taso = bsxfun(@minus, spike_times, stim.CorrectedStartTime);
+         taso = transpose(taso);                                
 
-            good_chans(chan) = is_responsive( taso, resp_bins);
-            if good_chans(chan) == 1
-                color = 'k';
-            else
-                color = grey;
-            end
+         nhist = histc( taso, psth_bins);
+         nhist = nhist ./ bin_width;
 
-            chan_idx = chan_map.MCS_Chan == chan;
-            axes( sp( chan_map.Subplot_idx( chan_idx)))
+         good_chans(chan) = is_responsive( taso, resp_bins);
+         if good_chans(chan) == 1
+             color = 'k';
+         else
+             color = grey;
+         end
 
-            plotSE_patch( psth_bins, nhist', 'x', gca, color);
+         chan_idx = chan_map.MCS_Chan == chan;
+         axes( sp( chan_map.Subplot_idx( chan_idx)))
 
-            xlabel('Time (s)')
-            ylabel('Firing Rate (Hz)')        
+         plotSE_patch( psth_bins, nhist', 'x', gca, color);
 
-            warp_chan = chan_map.Warp_Chan( chan_idx);
-            title(sprintf('E%02d: C%02d', warp_chan, chan))
-        end    
+         xlabel('Time (s)')
+         ylabel('Firing Rate (Hz)')        
 
-        fig_file = strrep( h5_files(i).name, '.h5', '_psth');
-        myPrint( fullfile( save_path, fig_file), 'png', 150)
-        close(fig)
-        
-        % Draw and save Raster
-        fig = figure( 'name', ['Raster: ' h5_files(i).name],...
-                    'position', [50 50 1850 950]);
-        sp = dealSubplots(4, nChans/4);       
-                    
-        for chan = 1 : nChans                                                            
+         warp_chan = chan_map.Warp_Chan( chan_idx);
+         title(sprintf('E%02d: C%02d', warp_chan, chan))
+     end    
 
-            taso = bsxfun(@minus, spike_times{chan}, stim.CorrectedStartTime);
-            nhist = histc( transpose(taso), raster_bins);
+     fig_file = strrep( h5_files(i).name, '.h5', '_psth');
+     myPrint( fullfile( save_path, fig_file), 'png', 150)
+     close(fig)
 
-            chan_idx = chan_map.MCS_Chan == chan;
-            ax = sp( chan_map.Subplot_idx( chan_idx));
+     % Draw and save Raster
+     fig = figure( 'name', ['Raster: ' h5_files(i).name],...
+                 'position', [50 50 1850 950]);
+     sp = dealSubplots(4, nChans/4);       
 
-            drawRaster( nhist', raster_bins, ax, stim.Frequency, cmocean('thermal'))
-  
-            warp_chan = chan_map.Warp_Chan( chan_idx);
-            title(sprintf('E%02d: C%02d', warp_chan, chan))
-        end    
+     for chan = 1 : nChans                                                            
 
-        fig_file = strrep( h5_files(i).name, '.h5', '_raster');
-        myPrint( fullfile( save_path, fig_file), 'png', 150)
-        close(fig)
-        
-        % Draw and save FRA
-        fig =  figure( 'name', ['FRA: ' h5_files(i).name],...
-                'position', [50 50 1850 950]);     
-        sp = dealSubplots(4, nChans/4); 
+         taso = bsxfun(@minus, spike_times{chan}, stim.CorrectedStartTime);
+         nhist = histc( transpose(taso), raster_bins);
 
-        for chan = 1 : nChans
+         chan_idx = chan_map.MCS_Chan == chan;
+         ax = sp( chan_map.Subplot_idx( chan_idx));
 
-            taso = bsxfun(@minus, spike_times{chan}, stim.CorrectedStartTime);
-            nhist = histc( transpose(taso), fra_bin);
-            nhist = nhist(1,:)' ./ diff(fra_bin);    
+         drawRaster( nhist', raster_bins, ax, stim.Frequency, cmocean('thermal'))
 
-            spike_rate = nan( size( freqs));
+         warp_chan = chan_map.Warp_Chan( chan_idx);
+         title(sprintf('E%02d: C%02d', warp_chan, chan))
+     end    
 
-            for stim_idx = 1 : numel(freqs)
+     fig_file = strrep( h5_files(i).name, '.h5', '_raster');
+     myPrint( fullfile( save_path, fig_file), 'png', 150)
+     close(fig)
 
-                rows = ismember([stim.Frequency stim.dB_SPL],...
-                                [freqs(stim_idx) levels(stim_idx)],'rows');
+     % Draw and save FRA
+     fig =  figure( 'name', ['FRA: ' h5_files(i).name],...
+             'position', [50 50 1850 950]);     
+     sp = dealSubplots(4, nChans/4); 
 
-                spike_rate(stim_idx) = mean(nhist(rows));
-            end
+     for chan = 1 : nChans
 
-            chan_idx = chan_map.MCS_Chan == chan;
-            axes( sp( chan_map.Subplot_idx( chan_idx)))  
+         taso = bsxfun(@minus, spike_times{chan}, stim.CorrectedStartTime);
+         nhist = histc( transpose(taso), fra_bin);
+         nhist = nhist(1,:)' ./ diff(fra_bin);    
 
-            imagesc( freqs(1,:) ./ 1e3, levels(:,1), spike_rate) 
+         spike_rate = nan( size( freqs));
 
-            xlabel('Frequency (kHz)')
-            ylabel('Level (dB SPL)')
+         for stim_idx = 1 : numel(freqs)
 
-            warp_chan = chan_map.Warp_Chan( chan_idx);
-            title(sprintf('E%02d: C%02d', warp_chan, chan))
+             rows = ismember([stim.Frequency stim.dB_SPL],...
+                             [freqs(stim_idx) levels(stim_idx)],'rows');
 
-            axis tight
+             spike_rate(stim_idx) = mean(nhist(rows));
+         end
 
-            % Remove outliers when setting color scale
-            good_rates = ~isoutlier( spike_rate(:), 'Threshold', 5);
-            good_rates = spike_rate( good_rates);
-            
-            if any(good_rates > 0)
-                set(gca,'CLim',minmax(good_rates'))
-            end
-            
-            if good_chans(chan) == 1
-                colormap(gca,magma);
-            else
-                colormap(gca,'gray');
-            end
-            
-        end
-        
-        fig_file = strrep( h5_files(i).name, '.h5', '_FRA');
-        myPrint( fullfile( save_path, fig_file), 'png', 150)
-        close(fig)        
-    end
+         chan_idx = chan_map.MCS_Chan == chan;
+         axes( sp( chan_map.Subplot_idx( chan_idx)))  
+
+         imagesc( freqs(1,:) ./ 1e3, levels(:,1), spike_rate) 
+
+         xlabel('Frequency (kHz)')
+         ylabel('Level (dB SPL)')
+
+         warp_chan = chan_map.Warp_Chan( chan_idx);
+         title(sprintf('E%02d: C%02d', warp_chan, chan))
+
+         axis tight
+
+         % Remove outliers when setting color scale
+         good_rates = ~isoutlier( spike_rate(:), 'Threshold', 5);
+         good_rates = spike_rate( good_rates);
+
+         if any(good_rates > 0)
+             set(gca,'CLim',minmax(good_rates'))
+         end
+
+         if good_chans(chan) == 1
+             colormap(gca,magma);
+         else
+             colormap(gca,'gray');
+         end
+
+     end
+
+     fig_file = strrep( h5_files(i).name, '.h5', '_FRA');
+     myPrint( fullfile( save_path, fig_file), 'png', 150)
+     close(fig)        
+    
 
     
 catch err
