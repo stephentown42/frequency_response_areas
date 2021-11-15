@@ -24,7 +24,6 @@ function show_me_FRAs(stimTable, spikeTimes, time_opts, plot_opts)
 %
 
 
-
 try
    
     % Parse inputs
@@ -41,19 +40,11 @@ try
     resp_bins = -time_opt.responsive_window : time_opt.responsive_window : time_opt.responsive_window;        
     raster_bins = time_opt.psth_window(0) : 0.001 : time_opt.psth_window(1);
     fra_bin = [0 time_opt.fra_bin_width];
-                          
-    % Preassign frequency response area variables
-    stimTable = sortrows(stimTable, {'Frequency','dB_SPL','StartTime'});
-    [freqs, levels] = meshgrid( unique(stimTable.Frequency), unique(stimTable.dB_SPL));
-    
+                             
+    % Get Frequency Repsonse Area    
     FRA, taso = get_FRA(stimTable, spike_times, fra_bin)
-      
     
-
-
-     
-                           
-   
+    
     % Test if unit is responsive across all tones
     [h, p] = is_responsive( taso, resp_bins);
     if h
@@ -123,6 +114,10 @@ end
 
 
 function FRA, taso = get_FRA(stim, spike_times, fra_bin)
+
+   % Preassign frequency response area variables
+   stimTable = sortrows(stimTable, {'Frequency','dB_SPL','StartTime'});
+   [freqs, levels] = meshgrid( unique(stimTable.Frequency), unique(stimTable.dB_SPL));
  
    % Ensure spike times is a row vector
    if iscolumn(spike_times)
@@ -130,7 +125,7 @@ function FRA, taso = get_FRA(stim, spike_times, fra_bin)
    end           
 
    % Get spike times after sound onset                                                          
-   taso = bsxfun(@minus, spike_times, stim.startTime);
+   taso = bsxfun(@minus, spike_times, stimTable.startTime);
    taso = transpose(taso);   
 
    % Get spike rate across time
@@ -141,12 +136,14 @@ function FRA, taso = get_FRA(stim, spike_times, fra_bin)
 
    for stim_idx = 1 : numel(freqs)
 
-      rows = ismember([stim.Frequency stim.dB_SPL],...
+      rows = ismember([stimTable.Frequency stimTable.dB_SPL],...
                     [freqs(stim_idx) levels(stim_idx)],'rows');
 
       FRA(stim_idx) = mean(nhist(rows));
    end
 
+   % Convert to table
+   FRA = array2table(FRA, 'VariableNames', num2str(unique(stimTable.Frequency)), 'RowNames', num2str(unique(stimTable.dB_SPL)))
 
 
 function h, p = is_responsive( taso, resp_bins)
