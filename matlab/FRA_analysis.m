@@ -1,6 +1,10 @@
 classdef FRA
     %FRA Helper FRA functions to be used in WARP and neuropixel here
 
+    %calculate the mean spontaneous rate and calculate a threshold based on spontaneous
+    %rate+20% of max rate during stimulus-spontaneous rate.                      
+    % >>> srate=mean(spon,'all')+(1/5*(max(max(spikes))))
+
     methods (Static)
         
         function z = smoothFRA(z)
@@ -22,6 +26,7 @@ classdef FRA
             z2     = conv2(p,s,'same'); %smooth
             z = z2(2:m+1,2:n+1);%remove the padding
         end
+        
         function [bounds,CF,Q10,Q30] = calculateFRAbounds(spikes,nFreqs,nLevel,freqs,srate)
             % Then do the bounds
             bounds=[];
