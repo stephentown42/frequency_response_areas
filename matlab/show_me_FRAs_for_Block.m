@@ -51,44 +51,21 @@ try
       spike_times = transpose(spike_times)
     end   
      
+    % Get spike times after sound onset                                                          
+    taso = bsxfun(@minus, spike_times, stim.startTime);
+    taso = transpose(taso);                                
 
-     % Draw and save PSTH
-     fig = figure( 'name', ['PSTH: ' h5_files(i).name],...
-                 'position', [50 50 1850 950]);
-     sp = dealSubplots(4, nChans/4);       
+    
 
-     
+    % Test if unit is responsive across all tones
+    is_responsive( taso, resp_bins);
+      
 
-     for chan = 1 : nChans                                                            
+    
 
-         taso = bsxfun(@minus, spike_times, stim.CorrectedStartTime);
-         taso = transpose(taso);                                
 
-         nhist = histc( taso, psth_bins);
-         nhist = nhist ./ bin_width;
 
-         good_chans(chan) = is_responsive( taso, resp_bins);
-         if good_chans(chan) == 1
-             color = 'k';
-         else
-             color = grey;
-         end
 
-         chan_idx = chan_map.MCS_Chan == chan;
-         axes( sp( chan_map.Subplot_idx( chan_idx)))
-
-         plotSE_patch( psth_bins, nhist', 'x', gca, color);
-
-         xlabel('Time (s)')
-         ylabel('Firing Rate (Hz)')        
-
-         warp_chan = chan_map.Warp_Chan( chan_idx);
-         title(sprintf('E%02d: C%02d', warp_chan, chan))
-     end    
-
-     fig_file = strrep( h5_files(i).name, '.h5', '_psth');
-     myPrint( fullfile( save_path, fig_file), 'png', 150)
-     close(fig)
 
      % Draw and save Raster
      fig = figure( 'name', ['Raster: ' h5_files(i).name],...
@@ -176,9 +153,24 @@ end
 
 
 function is_good = is_responsive( taso, resp_bins)
-
+% function is_good = is_responsive( taso, resp_bins)
+% 
 % Get difference in number of spikes before and after tone
-nhist = histc( taso, resp_bins);
-x = diff(nhist(1:2,:));
-is_good = ttest(x);
+   nhist = histc( taso, resp_bins);
+   x = diff(nhist(1:2,:));
+   is_good = ttest(x);
 
+
+function fig = draw_PSTH(taso, psth_bins)
+% function fig = draw_PSTH(taso, psth_bins)
+%
+% Draw PSTH
+   nhist = histc( taso, psth_bins);
+   nhist = nhist ./ bin_width;
+
+   fig = figure();
+
+   plotSE_patch( psth_bins, nhist', 'x', gca, color);
+
+   xlabel('Time (s)')
+   ylabel('Firing Rate (Hz)')    
