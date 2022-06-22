@@ -3,7 +3,7 @@ Code to plot and analyse frequency tuning of sound responsive units.
 
 To do:
 Request data from around the lab
-  - Behavioral FRAs from WE (Kat?) / Nellie (Floz)
+  - Behavioral FRAs 
   - Anesthetized experiments
 
 
